@@ -25,7 +25,7 @@ body {
 
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
-  color-scheme: light dark;
+  color-scheme: light;
   color: var(--text);
   background: var(--bg);
   font-synthesis: none;
@@ -72,6 +72,20 @@ body {
 
 body {
   margin: 0;
+}
+
+input,
+select,
+textarea {
+  color-scheme: light;
+  background-color: #ffffff;
+  color: #111827;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af;
+  opacity: 1;
 }
 
 h1,

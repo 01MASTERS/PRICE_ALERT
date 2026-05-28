@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Alert, CreateAlertReq } from '../types/alert';
+import type { Alert, CreateAlertReq, UpdateAlertReq } from '../types/alert';
 
 interface ApiAlert {
   id: number;
@@ -8,6 +8,8 @@ interface ApiAlert {
   target_price: number;
   current_price?: number | null;
   interval_minutes: number;
+  schedule_mode?: 'period' | 'custom_times';
+  custom_times?: string[] | null;
   notified: boolean;
   created_at: string;
   last_checked_at?: string | null;
@@ -24,6 +26,8 @@ const mapAlert = (alert: ApiAlert): Alert => ({
   targetPrice: alert.target_price,
   currentPrice: alert.current_price,
   intervalMinutes: alert.interval_minutes,
+  scheduleMode: alert.schedule_mode || 'period',
+  customTimes: alert.custom_times,
   notified: alert.notified,
   createdAt: alert.created_at,
   lastCheckedAt: alert.last_checked_at,
@@ -39,6 +43,19 @@ export const createAlert = async (payload: CreateAlertReq): Promise<Alert> => {
     product_url: payload.productUrl,
     target_price: payload.targetPrice,
     interval_minutes: payload.intervalMinutes,
+    schedule_mode: payload.scheduleMode,
+    custom_times: payload.scheduleMode === 'custom_times' ? payload.customTimes : undefined,
+  });
+  return mapAlert(data);
+};
+
+export const updateAlert = async (id: string, payload: UpdateAlertReq): Promise<Alert> => {
+  const { data } = await api.put<ApiAlert>(`/alerts/${id}`, {
+    product_url: payload.productUrl,
+    target_price: payload.targetPrice,
+    interval_minutes: payload.intervalMinutes,
+    schedule_mode: payload.scheduleMode,
+    custom_times: payload.scheduleMode === 'custom_times' ? payload.customTimes : undefined,
   });
   return mapAlert(data);
 };

@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import axios from 'axios';
 import toast from 'react-hot-toast';
-import type { Alert, CreateAlertReq } from '../types/alert';
-import { fetchAlerts, createAlert, deleteAlert } from '../services/api';
+import type { Alert, CreateAlertReq, UpdateAlertReq } from '../types/alert';
+import { fetchAlerts, createAlert, updateAlert, deleteAlert } from '../services/api';
 import { Navbar } from '../components/Navbar';
 import { DashboardCards } from '../components/DashboardCards';
 import { AlertForm } from '../components/AlertForm';
@@ -14,31 +15,47 @@ export const Home = () => {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
   const [formLoading, setFormLoading] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
   const [deleteModalId, setDeleteModalId] = useState<string | null>(null);
+  const [editingAlert, setEditingAlert] = useState<Alert | null>(null);
 
-  const loadAlerts = async () => {
+  const getErrorMessage = useCallback((fallback: string, error: unknown) => {
+    if (!axios.isAxiosError(error)) return fallback;
+
+    const detail = error.response?.data?.detail;
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail) && detail[0]?.msg) return detail[0].msg;
+
+    return fallback;
+  }, []);
+
+  const loadAlerts = useCallback(async () => {
     try {
       const data = await fetchAlerts();
       setAlerts(data);
-    } catch {
-      toast.error('Failed to fetch alerts');
+    } catch (error) {
+      toast.error(getErrorMessage('Failed to fetch alerts', error));
     } finally {
       setLoading(false);
     }
-  };
+  }, [getErrorMessage]);
 
   useEffect(() => {
     loadAlerts();
-  }, []);
+  }, [loadAlerts]);
 
   const handleCreate = async (payload: CreateAlertReq) => {
     setFormLoading(true);
     try {
       const newAlert = await createAlert(payload);
       setAlerts((prev) => [newAlert, ...prev]);
-      toast.success('Alert created successfully!');
-    } catch {
-      toast.error('Failed to create alert');
+      if (newAlert.currentPrice == null) {
+        toast.success('Alert created. First price check will retry in the background.');
+      } else {
+        toast.success('Alert created and price fetched.');
+      }
+    } catch (error) {
+      toast.error(getErrorMessage('Failed to create alert', error));
     } finally {
       setFormLoading(false);
     }
@@ -50,10 +67,28 @@ export const Home = () => {
       await deleteAlert(deleteModalId);
       setAlerts((prev) => prev.filter((a) => a.id !== deleteModalId));
       toast.success('Alert deleted successfully!');
-    } catch {
-      toast.error('Failed to delete alert');
+    } catch (error) {
+      toast.error(getErrorMessage('Failed to delete alert', error));
     } finally {
       setDeleteModalId(null);
+    }
+  };
+
+  const handleUpdate = async (payload: UpdateAlertReq) => {
+    if (!editingAlert) return;
+
+    setEditLoading(true);
+    try {
+      const updatedAlert = await updateAlert(editingAlert.id, payload);
+      setAlerts((prev) => prev.map((alert) => (
+        alert.id === updatedAlert.id ? updatedAlert : alert
+      )));
+      setEditingAlert(null);
+      toast.success('Alert updated successfully.');
+    } catch (error) {
+      toast.error(getErrorMessage('Failed to update alert', error));
+    } finally {
+      setEditLoading(false);
     }
   };
 
@@ -76,7 +111,7 @@ export const Home = () => {
         ) : alerts.length === 0 ? (
           <EmptyState />
         ) : (
-          <AlertsList alerts={alerts} onDeleteClick={setDeleteModalId} />
+          <AlertsList alerts={alerts} onDeleteClick={setDeleteModalId} onEditClick={setEditingAlert} />
         )}
       </main>
 
@@ -85,6 +120,24 @@ export const Home = () => {
         onClose={() => setDeleteModalId(null)}
         onConfirm={handleDelete}
       />
+
+      {editingAlert ? (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-center justify-center px-4 py-10">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75" onClick={() => setEditingAlert(null)} />
+            <div className="relative w-full max-w-3xl">
+              <AlertForm
+                initialAlert={editingAlert}
+                onSubmit={handleUpdate}
+                isLoading={editLoading}
+                title="Edit Alert"
+                submitLabel="Save Changes"
+                onCancel={() => setEditingAlert(null)}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

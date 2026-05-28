@@ -1,12 +1,13 @@
 import type { Alert } from '../types/alert';
-import { Trash2, ExternalLink } from 'lucide-react';
+import { Trash2, ExternalLink, Pencil } from 'lucide-react';
 
 interface Props {
   alerts: Alert[];
   onDeleteClick: (id: string) => void;
+  onEditClick: (alert: Alert) => void;
 }
 
-export const AlertsList = ({ alerts, onDeleteClick }: Props) => {
+export const AlertsList = ({ alerts, onDeleteClick, onEditClick }: Props) => {
   const formatCurrency = (value?: number | null) =>
     value == null ? '-' : new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -17,6 +18,14 @@ export const AlertsList = ({ alerts, onDeleteClick }: Props) => {
   const formatInterval = (minutes: number) => {
     if (minutes < 60) return `${minutes} min`;
     return `${minutes / 60} hr`;
+  };
+
+  const formatSchedule = (alert: Alert) => {
+    if (alert.scheduleMode === 'custom_times') {
+      return alert.customTimes?.length ? alert.customTimes.join(', ') : 'Custom times';
+    }
+
+    return `Every ${formatInterval(alert.intervalMinutes)}`;
   };
 
   const StatusBadge = ({ notified }: { notified: boolean }) => (
@@ -37,7 +46,7 @@ export const AlertsList = ({ alerts, onDeleteClick }: Props) => {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Interval</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Schedule</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
             </tr>
           </thead>
@@ -57,9 +66,12 @@ export const AlertsList = ({ alerts, onDeleteClick }: Props) => {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCurrency(alert.targetPrice)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatCurrency(alert.currentPrice)}</td>
                 <td className="px-6 py-4 whitespace-nowrap"><StatusBadge notified={alert.notified} /></td>
-                <td className="px-6 py-4 text-sm text-gray-500 max-w-[200px] truncate">{formatInterval(alert.intervalMinutes)}</td>
+                <td className="px-6 py-4 text-sm text-gray-500 max-w-[200px] truncate">{formatSchedule(alert)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button onClick={() => onDeleteClick(alert.id)} className="text-gray-400 hover:text-red-600 transition-colors">
+                  <button onClick={() => onEditClick(alert)} className="text-gray-400 hover:text-blue-600 transition-colors mr-3" aria-label="Edit alert">
+                    <Pencil className="w-5 h-5" />
+                  </button>
+                  <button onClick={() => onDeleteClick(alert.id)} className="text-gray-400 hover:text-red-600 transition-colors" aria-label="Delete alert">
                     <Trash2 className="w-5 h-5" />
                   </button>
                 </td>
@@ -77,16 +89,21 @@ export const AlertsList = ({ alerts, onDeleteClick }: Props) => {
                   {alert.productName || alert.productUrl}
                </a>
             </div>
-            <button onClick={() => onDeleteClick(alert.id)} className="absolute top-4 right-4 text-gray-400 hover:text-red-600">
+            <div className="absolute top-4 right-4 flex gap-2">
+              <button onClick={() => onEditClick(alert)} className="text-gray-400 hover:text-blue-600" aria-label="Edit alert">
+                <Pencil className="w-5 h-5" />
+              </button>
+              <button onClick={() => onDeleteClick(alert.id)} className="text-gray-400 hover:text-red-600" aria-label="Delete alert">
               <Trash2 className="w-5 h-5" />
-            </button>
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-4 mb-3 text-sm">
               <div><p className="text-gray-500">Target</p><p className="font-semibold">{formatCurrency(alert.targetPrice)}</p></div>
               <div><p className="text-gray-500">Current</p><p className="font-medium">{formatCurrency(alert.currentPrice)}</p></div>
             </div>
             <div className="flex justify-between items-center border-t border-gray-100 pt-3">
               <StatusBadge notified={alert.notified} />
-              <span className="text-xs text-gray-500 truncate max-w-[150px]">{formatInterval(alert.intervalMinutes)}</span>
+              <span className="text-xs text-gray-500 truncate max-w-[150px]">{formatSchedule(alert)}</span>
             </div>
           </div>
         ))}
