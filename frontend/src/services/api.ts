@@ -15,8 +15,11 @@ interface ApiAlert {
   last_checked_at?: string | null;
 }
 
+const isNgrok = (import.meta.env.VITE_API_URL || '').includes('ngrok');
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+  headers: isNgrok ? { 'ngrok-skip-browser-warning': '1' } : undefined,
 });
 
 const mapAlert = (alert: ApiAlert): Alert => ({

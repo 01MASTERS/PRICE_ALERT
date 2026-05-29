@@ -101,10 +101,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Price Alert API", lifespan=lifespan)
 
+@app.middleware("http")
+async def debug_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Debug-Test"] = "working"
+    return response
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
