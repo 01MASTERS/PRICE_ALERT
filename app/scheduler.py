@@ -73,18 +73,18 @@ async def apply_alert_result(alert: Alert, current_price: float, product_name: s
             url=alert.product_url,
         )
         alert.notified = True
-        logger.info(f"Notification flow completed for Alert ID {alert.id}; alert remains scheduled.")
+        # logger.info(f"Notification flow completed for Alert ID {alert.id}; alert remains scheduled.")
     else:
         logger.info(f"Alert ID {alert.id} checked: Rs. {current_price} is above target Rs. {alert.target_price}.")
 
 
 async def check_database_alerts():
-    logger.info("Scheduler execution started; reloading alerts from DB.")
+    # logger.info("Scheduler execution started; reloading alerts from DB.")
     db: Session = SessionLocal()
 
     try:
         alerts = db.query(Alert).all()
-        logger.info(f"Scheduler loaded {len(alerts)} alert(s) from DB.")
+        # logger.info(f"Scheduler loaded {len(alerts)} alert(s) from DB.")
         now_utc = utc_now()
         now_local = local_now()
 
@@ -92,10 +92,10 @@ async def check_database_alerts():
             if not should_check_alert(alert, now_utc, now_local):
                 continue
 
-            logger.info(
-                f"Schedule reached for Alert ID {alert.id} "
-                f"(mode={alert.schedule_mode}, interval={alert.interval_minutes}, custom_times={alert.custom_times})."
-            )
+            # logger.info(
+            #     f"Schedule reached for Alert ID {alert.id} "
+            #     f"(mode={alert.schedule_mode}, interval={alert.interval_minutes}, custom_times={alert.custom_times})."
+            # )
             current_price, product_name = await asyncio.to_thread(
                 get_price_and_name,
                 alert.product_url,
@@ -118,10 +118,10 @@ def log_scheduler_event(event):
     job = scheduler.get_job(event.job_id)
     next_run_time = job.next_run_time if job else None
 
-    if event.exception:
-        logger.error(f"Scheduler job {event.job_id} failed: {event.exception}. Next run: {next_run_time}")
-    else:
-        logger.info(f"Scheduler job {event.job_id} completed. Next run: {next_run_time}")
+    # if event.exception:
+    #     logger.error(f"Scheduler job {event.job_id} failed: {event.exception}. Next run: {next_run_time}")
+    # else:
+    #     logger.info(f"Scheduler job {event.job_id} completed. Next run: {next_run_time}")
 
 
 scheduler = AsyncIOScheduler(timezone=APP_TIMEZONE)
