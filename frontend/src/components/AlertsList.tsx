@@ -1,5 +1,5 @@
 import type { Alert } from '../types/alert';
-import { Trash2, ExternalLink, Pencil } from 'lucide-react';
+import { Trash2, ExternalLink, Pencil, Clock, CheckCircle2 } from 'lucide-react';
 
 interface Props {
   alerts: Alert[];
@@ -29,85 +29,87 @@ export const AlertsList = ({ alerts, onDeleteClick, onEditClick }: Props) => {
   };
 
   const StatusBadge = ({ notified }: { notified: boolean }) => (
-    <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${
-      notified ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full border ${
+      notified 
+        ? 'bg-emerald-50 text-emerald-700 border-emerald-200/50' 
+        : 'bg-indigo-50 text-indigo-700 border-indigo-200/50'
     }`}>
+      {notified ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
       {notified ? 'Triggered' : 'Active'}
     </span>
   );
 
   return (
-    <>
-      <div className="hidden md:block bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Schedule</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {alerts.map((alert) => (
-              <tr key={alert.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-900 truncate max-w-[200px]">
-                      {alert.productName || alert.productUrl}
-                    </span>
-                    <a href={alert.productUrl} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-blue-600">
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCurrency(alert.targetPrice)}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatCurrency(alert.currentPrice)}</td>
-                <td className="px-6 py-4 whitespace-nowrap"><StatusBadge notified={alert.notified} /></td>
-                <td className="px-6 py-4 text-sm text-gray-500 max-w-[200px] truncate">{formatSchedule(alert)}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button onClick={() => onEditClick(alert)} className="text-gray-400 hover:text-blue-600 transition-colors mr-3" aria-label="Edit alert">
-                    <Pencil className="w-5 h-5" />
-                  </button>
-                  <button onClick={() => onDeleteClick(alert.id)} className="text-gray-400 hover:text-red-600 transition-colors" aria-label="Delete alert">
-                    <Trash2 className="w-5 h-5" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="md:hidden space-y-4">
-        {alerts.map((alert) => (
-          <div key={alert.id} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative">
-            <div className="pr-8 mb-2 flex flex-col gap-1">
-               <a href={alert.productUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-blue-600 hover:underline truncate">
+    <div className="space-y-4">
+      {alerts.map((alert) => (
+        <div key={alert.id} className="group bg-white p-5 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md hover:border-indigo-100 transition-all">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between sm:justify-start gap-3 mb-1">
+                <a 
+                  href={alert.productUrl} 
+                  target="_blank" 
+                  rel="noreferrer" 
+                  className="text-base font-bold text-gray-900 hover:text-indigo-600 truncate transition-colors"
+                  title={alert.productName || alert.productUrl}
+                >
                   {alert.productName || alert.productUrl}
-               </a>
+                </a>
+                <a 
+                  href={alert.productUrl} 
+                  target="_blank" 
+                  rel="noreferrer" 
+                  className="p-1 text-gray-400 hover:text-indigo-600 bg-gray-50 hover:bg-indigo-50 rounded-lg transition-colors flex-shrink-0"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </div>
+              <div className="flex items-center gap-3 text-sm text-gray-500">
+                <StatusBadge notified={alert.notified} />
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5" /> {formatSchedule(alert)}
+                </span>
+              </div>
             </div>
-            <div className="absolute top-4 right-4 flex gap-2">
-              <button onClick={() => onEditClick(alert)} className="text-gray-400 hover:text-blue-600" aria-label="Edit alert">
-                <Pencil className="w-5 h-5" />
+
+            <div className="flex items-center gap-6 sm:gap-8 bg-gray-50/50 rounded-xl p-3 border border-gray-100/50">
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-0.5">Target</p>
+                <p className="text-sm font-bold text-gray-900">{formatCurrency(alert.targetPrice)}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-0.5">Current</p>
+                <p className={`text-sm font-bold ${
+                  alert.currentPrice && alert.currentPrice <= alert.targetPrice 
+                    ? 'text-emerald-600' 
+                    : 'text-gray-900'
+                }`}>
+                  {formatCurrency(alert.currentPrice)}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 sm:border-l border-gray-100 sm:pl-4">
+              <button 
+                onClick={() => onEditClick(alert)} 
+                className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all" 
+                aria-label="Edit alert"
+              >
+                <Pencil className="w-4 h-4" />
               </button>
-              <button onClick={() => onDeleteClick(alert.id)} className="text-gray-400 hover:text-red-600" aria-label="Delete alert">
-              <Trash2 className="w-5 h-5" />
+              <button 
+                onClick={() => onDeleteClick(alert.id)} 
+                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all" 
+                aria-label="Delete alert"
+              >
+                <Trash2 className="w-4 h-4" />
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-4 mb-3 text-sm">
-              <div><p className="text-gray-500">Target</p><p className="font-semibold">{formatCurrency(alert.targetPrice)}</p></div>
-              <div><p className="text-gray-500">Current</p><p className="font-medium">{formatCurrency(alert.currentPrice)}</p></div>
-            </div>
-            <div className="flex justify-between items-center border-t border-gray-100 pt-3">
-              <StatusBadge notified={alert.notified} />
-              <span className="text-xs text-gray-500 truncate max-w-[150px]">{formatSchedule(alert)}</span>
-            </div>
+            
           </div>
-        ))}
-      </div>
-    </>
+        </div>
+      ))}
+    </div>
   );
 };

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Loader2, Plus, X } from 'lucide-react';
+import { Loader2, Plus, X, Link, IndianRupee, Clock } from 'lucide-react';
 import type { Alert, CreateAlertReq, ScheduleMode } from '../types/alert';
 
 const PRESET_INTERVALS = [5, 15, 30, 60, 120];
@@ -95,136 +95,150 @@ export const AlertForm = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm mb-8">
-      <h2 className="text-lg font-semibold mb-4">{title}</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+    <form onSubmit={handleSubmit} className="bg-white p-6 sm:p-8 rounded-2xl border border-gray-200 shadow-sm transition-all">
+      <h2 className="text-xl font-bold text-gray-900 mb-6 tracking-tight">{title}</h2>
+      
+      <div className="space-y-5 mb-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Product URL</label>
-          <input
-            type="url"
-            required
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-            placeholder="https://example.com/product"
-          />
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Product URL</label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Link className="h-5 w-5 text-gray-400" />
+            </div>
+            <input
+              type="url"
+              required
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all sm:text-sm"
+              placeholder="https://example.com/product"
+            />
+          </div>
         </div>
+
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Target Price</label>
-          <input
-            type="number"
-            required
-            min="1"
-            step="0.01"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-            placeholder="999"
-          />
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Target Price</label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <IndianRupee className="h-5 w-5 text-gray-400" />
+            </div>
+            <input
+              type="number"
+              required
+              min="1"
+              step="0.01"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all sm:text-sm"
+              placeholder="0.00"
+            />
+          </div>
         </div>
       </div>
 
-      <div className="mb-5">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Schedule</label>
-        <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+      <div className="mb-6 pt-4 border-t border-gray-100">
+        <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
+          <Clock className="w-4 h-4 text-gray-500" /> Schedule Mode
+        </label>
+        <div className="inline-flex w-full sm:w-auto rounded-xl border border-gray-200 bg-gray-50/50 p-1 mb-4">
           {[
-            { label: 'Period', value: 'period' },
-            { label: 'Custom Time(s)', value: 'custom_times' },
+            { label: 'Intervals', value: 'period' },
+            { label: 'Specific Time(s)', value: 'custom_times' },
           ].map((option) => (
             <button
               key={option.value}
               type="button"
               onClick={() => setScheduleMode(option.value as ScheduleMode)}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+              className={`flex-1 sm:flex-none px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
                 scheduleMode === option.value
-                  ? 'bg-white text-blue-700 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white text-indigo-700 shadow-sm border border-gray-200/50'
+                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100/50'
               }`}
             >
               {option.label}
             </button>
           ))}
         </div>
+
+        {scheduleMode === 'period' ? (
+          <div className="space-y-4 animate-fade-in">
+            <div className="flex flex-wrap gap-2">
+              {PRESET_INTERVALS.map((interval) => (
+                <button
+                  key={interval}
+                  type="button"
+                  onClick={() => {
+                    setIntervalValue(String(interval));
+                    setIntervalUnit('minutes');
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    intervalMinutes === interval
+                      ? 'bg-indigo-100 text-indigo-700 border border-indigo-200'
+                      : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
+                  }`}
+                >
+                  {interval < 60 ? `${interval} min` : `${interval / 60} hr`}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-[1fr_120px] gap-3">
+              <input
+                type="number"
+                min="1"
+                value={intervalValue}
+                onChange={(e) => setIntervalValue(e.target.value)}
+                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all sm:text-sm"
+              />
+              <select
+                value={intervalUnit}
+                onChange={(e) => setIntervalUnit(e.target.value as 'minutes' | 'hours')}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all sm:text-sm"
+              >
+                <option value="minutes">Mins</option>
+                <option value="hours">Hours</option>
+              </select>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3 animate-fade-in">
+            <div className="space-y-2">
+              {customTimes.map((time, index) => (
+                <div key={index} className="flex gap-2 items-center">
+                  <input
+                    type="time"
+                    value={time}
+                    onChange={(e) => updateCustomTime(index, e.target.value)}
+                    className="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all sm:text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeCustomTime(index)}
+                    className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                    aria-label="Remove time"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={addCustomTime}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold text-indigo-600 hover:bg-indigo-50 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Add Another Time
+            </button>
+          </div>
+        )}
       </div>
 
-      {scheduleMode === 'period' ? (
-        <div className="mb-6 space-y-3">
-          <div className="flex flex-wrap gap-2">
-            {PRESET_INTERVALS.map((interval) => (
-              <button
-                key={interval}
-                type="button"
-                onClick={() => {
-                  setIntervalValue(String(interval));
-                  setIntervalUnit('minutes');
-                }}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                  intervalMinutes === interval
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {interval < 60 ? `${interval} min` : `${interval / 60} hr`}
-              </button>
-            ))}
-          </div>
-          <div className="grid grid-cols-[minmax(0,1fr)_140px] gap-3 max-w-sm">
-            <input
-              type="number"
-              min="1"
-              value={intervalValue}
-              onChange={(e) => setIntervalValue(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-            />
-            <select
-              value={intervalUnit}
-              onChange={(e) => setIntervalUnit(e.target.value as 'minutes' | 'hours')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-            >
-              <option value="minutes">Minutes</option>
-              <option value="hours">Hours</option>
-            </select>
-          </div>
-        </div>
-      ) : (
-        <div className="mb-6 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {customTimes.map((time, index) => (
-              <div key={index} className="flex gap-2">
-                <input
-                  type="time"
-                  value={time}
-                  onChange={(e) => updateCustomTime(index, e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                />
-                <button
-                  type="button"
-                  onClick={() => removeCustomTime(index)}
-                  className="h-10 w-10 inline-flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:text-red-600 hover:border-red-200"
-                  aria-label="Remove time"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={addCustomTime}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            <Plus className="h-4 w-4" />
-            Add Time
-          </button>
-        </div>
-      )}
-
-      <div className={onCancel ? 'flex gap-3' : ''}>
+      <div className={`mt-6 ${onCancel ? 'grid grid-cols-2 gap-3' : ''}`}>
         {onCancel ? (
           <button
             type="button"
             onClick={onCancel}
-            className="w-full flex justify-center items-center py-2.5 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300 transition-all"
+            className="w-full flex justify-center items-center py-2.5 px-4 rounded-xl text-sm font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-200 transition-all"
           >
             Cancel
           </button>
@@ -232,9 +246,10 @@ export const AlertForm = ({
         <button
           type="submit"
           disabled={isLoading || !url || !price || (scheduleMode === 'custom_times' && validCustomTimes.length === 0)}
-          className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          className="w-full flex justify-center items-center py-2.5 px-4 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm shadow-indigo-200"
         >
-          {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : submitLabel}
+          {isLoading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
+          {submitLabel}
         </button>
       </div>
     </form>
