@@ -15,9 +15,9 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app import models, schemas
-from app.database import engine, get_db
+from app.database import SessionLocal, engine, get_db
 from app.notifier import send_telegram_alert
-from app.scheduler import SCHEDULER_JOB_ID, scheduler
+from app.scheduler import SCHEDULER_JOB_ID, calculate_next_check_at, scheduler
 from app.scraper import get_price_and_name
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -35,6 +35,8 @@ def ensure_alert_columns():
         statements.append("ALTER TABLE alerts ADD COLUMN schedule_mode VARCHAR NOT NULL DEFAULT 'period'")
     if "custom_times" not in existing_columns:
         statements.append("ALTER TABLE alerts ADD COLUMN custom_times VARCHAR")
+    if "next_check_at" not in existing_columns:
+        statements.append("ALTER TABLE alerts ADD COLUMN next_check_at DATETIME")
 
     if not statements:
         return
@@ -45,6 +47,25 @@ def ensure_alert_columns():
 
 
 ensure_alert_columns()
+
+
+def backfill_next_check_at():
+    db = SessionLocal()
+    try:
+        alerts = db.query(models.Alert).filter(models.Alert.next_check_at == None).all()
+        if not alerts:
+            return
+
+        for alert in alerts:
+            alert.next_check_at = calculate_next_check_at(alert)
+
+        db.commit()
+        logger.info(f"Backfilled next_check_at for {len(alerts)} alert(s).")
+    finally:
+        db.close()
+
+
+backfill_next_check_at()
 
 
 def send_initial_notification(alert: models.Alert):
@@ -78,6 +99,7 @@ def update_alert_price(alert: models.Alert, notify_if_target_hit: bool = False):
 
     alert.current_price = current_price
     alert.last_checked_at = datetime.utcnow()
+    alert.next_check_at = calculate_next_check_at(alert, alert.last_checked_at)
 
     if product_name:
         alert.product_name = product_name
@@ -125,6 +147,8 @@ def create_alert(alert: schemas.AlertCreate, db: Session = Depends(get_db)):
         custom_times=json.dumps(alert.custom_times) if alert.custom_times else None,
     )
     update_alert_price(db_alert, notify_if_target_hit=True)
+    if db_alert.next_check_at is None:
+        db_alert.next_check_at = calculate_next_check_at(db_alert)
 
     db.add(db_alert)
     db.commit()
@@ -146,6 +170,7 @@ def update_alert(alert_id: int, alert: schemas.AlertCreate, db: Session = Depend
     db_alert.schedule_mode = alert.schedule_mode
     db_alert.custom_times = json.dumps(alert.custom_times) if alert.custom_times else None
     db_alert.notified = False
+    db_alert.next_check_at = calculate_next_check_at(db_alert)
 
     if product_url_changed:
         db_alert.product_name = None
@@ -162,19 +187,7 @@ def update_alert(alert_id: int, alert: schemas.AlertCreate, db: Session = Depend
 
 @app.get("/alerts", response_model=List[schemas.AlertResponse])
 def get_alerts(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    alerts = db.query(models.Alert).offset(skip).limit(limit).all()
-    updated = False
-
-    for alert in alerts:
-        if alert.current_price is None:
-            updated = update_alert_price(alert) or updated
-
-    if updated:
-        db.commit()
-        for alert in alerts:
-            db.refresh(alert)
-
-    return alerts
+    return db.query(models.Alert).offset(skip).limit(limit).all()
 
 @app.delete("/alerts/{alert_id}", status_code=204)
 def delete_alert(alert_id: int, db: Session = Depends(get_db)):

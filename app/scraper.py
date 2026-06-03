@@ -1,33 +1,26 @@
 import logging
+import os
 import re
 import time
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
-from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
+import httpx
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-DIRECT_PRICE_CLASSES = ("v1zwn21l", "v1zwn20", "_1psv1zeb9", "_1psv1ze0")
-DIRECT_PRICE_SELECTOR = ".v1zwn21l.v1zwn20._1psv1zeb9._1psv1ze0"
-DIRECT_PRICE_XPATH = (
-    "//*"
-    "[contains(concat(' ', normalize-space(@class), ' '), ' v1zwn21l ')]"
-    "[contains(concat(' ', normalize-space(@class), ' '), ' v1zwn20 ')]"
-    "[contains(concat(' ', normalize-space(@class), ' '), ' _1psv1zeb9 ')]"
-    "[contains(concat(' ', normalize-space(@class), ' '), ' _1psv1ze0 ')]"
-)
-DIRECT_PRICE_SELECTORS = (
-    DIRECT_PRICE_SELECTOR,
-    f"xpath={DIRECT_PRICE_XPATH}",
-    ".Nx9bqj.CxhGGd",
-    "._30jeq3._16Jk6d",
-    "._30jeq3",
-)
+APIFY_TOKEN = os.getenv("APIFY_TOKEN")
+APIFY_ACTOR = os.getenv("APIFY_ACTOR", "codingfrontend/flipkart-product-scraper-pro")
+APIFY_BASE = "https://api.apify.com/v2/acts"
+APIFY_PINCODE = int(os.getenv("PINCODE", "823003"))
+APIFY_TIMEOUT = float(os.getenv("APIFY_TIMEOUT", "180"))
 
 
 def parse_price(raw_price: str) -> Optional[float]:
-    match = re.search(r"(\d[\d,]*(?:\.\d+)?)", raw_price or "")
+    match = re.search(r"(\d[\d,]*(?:\.\d+)?)", str(raw_price or ""))
     if not match:
         return None
 
@@ -39,93 +32,166 @@ def parse_price(raw_price: str) -> Optional[float]:
     return price if price > 0 else None
 
 
-def extract_page_title(page: Page) -> Optional[str]:
-    for selector in ("h1", "title"):
-        locator = page.locator(selector)
-        if locator.count() == 0:
-            continue
+def _coerce_price(value: Any) -> Optional[float]:
+    if value is None:
+        return None
 
-        name = locator.first.inner_text().strip()
-        if name:
-            return name.split("\n")[0].strip()
+    if isinstance(value, (int, float)):
+        return float(value) if value > 0 else None
 
-    title = page.title().strip()
-    return title or None
+    if isinstance(value, dict):
+        for key in ("value", "finalPrice", "fsp", "minPrice", "price"):
+            price = _coerce_price(value.get(key))
+            if price is not None:
+                return price
+        return None
+
+    return parse_price(str(value))
 
 
-def find_price_from_locators(page: Page) -> Tuple[Optional[float], Optional[str]]:
-    for selector in DIRECT_PRICE_SELECTORS:
-        locator = page.locator(selector)
-        count = locator.count()
-        logger.info(f"Direct selector {selector!r} matched {count} element(s).")
+def _extract_title_from_record(record: Any) -> Optional[str]:
+    if not isinstance(record, dict):
+        return None
 
-        for index in range(count):
-            item = locator.nth(index)
-            try:
-                if not item.is_visible():
-                    continue
-                raw_price = item.inner_text(timeout=3000).strip()
-            except Exception as exc:
-                logger.debug(f"Could not read direct price candidate {selector}[{index}]: {exc}")
+    product = record.get("product") or {}
+    if isinstance(product, dict):
+        for key in ("title",):
+            val = product.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+
+        titles = product.get("titles") or {}
+        if isinstance(titles, dict):
+            for key in ("title", "newTitle", "superTitle"):
+                val = titles.get(key)
+                if isinstance(val, str) and val.strip():
+                    return val.strip()
+
+    for key in ("title", "name"):
+        val = record.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+
+    return None
+
+
+def extract_page_title(page: Any) -> Optional[str]:
+    return _extract_title_from_record(page)
+
+
+def _extract_price_from_record(record: Any) -> Tuple[Optional[float], Optional[str]]:
+    if not isinstance(record, dict):
+        return None, None
+
+    pricing = record.get("pricing") or {}
+    if not isinstance(pricing, dict):
+        return None, None
+
+    for key in ("finalPrice", "fsp", "minPrice"):
+        raw = pricing.get(key)
+        price = _coerce_price(raw)
+        if price is not None:
+            return price, str(raw)
+
+    price_breakup = pricing.get("priceBreakup")
+    if isinstance(price_breakup, list):
+        for item in price_breakup:
+            if not isinstance(item, dict):
                 continue
-
-            current_price = parse_price(raw_price)
-            if current_price is not None:
-                return current_price, raw_price
-
-            logger.warning(f"Direct price candidate could not be parsed: {raw_price!r}")
+            if item.get("priceType") in {"FSP", "SELLING_PRICE", "FINAL_PRICE"}:
+                raw = item.get("value") or item.get("decimalValue")
+                price = _coerce_price(raw)
+                if price is not None:
+                    return price, str(raw)
 
     return None, None
 
 
-def extract_direct_price(page: Page, product_url: str) -> Tuple[Optional[float], Optional[str]]:
-    logger.info("Trying direct product page price extraction.")
-    page.goto(product_url, timeout=60000, wait_until="domcontentloaded")
-    page.wait_for_load_state("networkidle", timeout=20000)
+def find_price_from_locators(page: Any) -> Tuple[Optional[float], Optional[str]]:
+    return _extract_price_from_record(page)
 
-    page.wait_for_timeout(2000)
 
-    current_price, raw_price = find_price_from_locators(page)
-    if current_price is None:
-        class_query = ".".join(DIRECT_PRICE_CLASSES)
-        logger.warning(f"Direct extraction did not find a valid price for class tokens: {class_query}")
+def _normalize_items(data: Any) -> list[dict]:
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        for key in ("items", "data", "results"):
+            val = data.get(key)
+            if isinstance(val, list):
+                return val
+        return [data]
+    return []
+
+
+def _fetch_apify_record(product_url: str) -> Optional[dict]:
+    if not APIFY_TOKEN:
+        raise RuntimeError("APIFY_TOKEN is not set")
+
+    actor_id = APIFY_ACTOR.replace("/", "~")
+    url = f"{APIFY_BASE}/{actor_id}/run-sync-get-dataset-items"
+
+    run_input = {
+        "mode": "productUrl",
+        "productUrls": [product_url],
+        "maxItems": 1,
+        "pincode": APIFY_PINCODE,
+    }
+
+    params = {"token": APIFY_TOKEN}
+
+    with httpx.Client(timeout=APIFY_TIMEOUT) as client:
+        resp = client.post(url, params=params, json=run_input)
+        resp.raise_for_status()
+        data = resp.json()
+
+    items = _normalize_items(data)
+    if not items:
+        return None
+
+    first = items[0]
+    return first if isinstance(first, dict) else None
+
+
+def extract_direct_price(page: Any, product_url: str) -> Tuple[Optional[float], Optional[str]]:
+    logger.info("Trying Apify product price extraction.")
+    record = _fetch_apify_record(product_url)
+    if not record:
+        logger.warning("Apify returned no product data.")
         return None, None
 
-    product_name = extract_page_title(page)
-    logger.info(f"Direct extraction succeeded at Rs. {current_price} from {raw_price!r}")
+    current_price, raw_price = _extract_price_from_record(record)
+    if current_price is None:
+        logger.warning("Could not extract price from Apify response.")
+        return None, None
+
+    product_name = _extract_title_from_record(record)
+    logger.info(f"Extraction succeeded at Rs. {current_price} from {raw_price!r}")
     return current_price, product_name
 
 
 def get_price_and_name(product_url: str, retries: int = 3) -> Tuple[Optional[float], Optional[str]]:
+    last_error = None
+
     for attempt in range(retries):
         try:
-            with sync_playwright() as playwright:
-                browser = playwright.chromium.launch(headless=True)
-                try:
-                    context = browser.new_context(
-                        user_agent=(
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                            "AppleWebKit/537.36 (KHTML, like Gecko) "
-                            "Chrome/120.0.0.0 Safari/537.36"
-                        )
-                    )
-                    page = context.new_page()
+            logger.info(f"Attempt {attempt + 1}: checking product price.")
+            current_price, product_name = extract_direct_price(None, product_url)
+            if current_price is not None:
+                return current_price, product_name
 
-                    logger.info(f"Attempt {attempt + 1}: checking product price.")
-                    current_price, product_name = extract_direct_price(page, product_url)
-                    if current_price is not None:
-                        return current_price, product_name
-                finally:
-                    browser.close()
-
-        except PlaywrightTimeoutError:
-            logger.warning(f"Timeout error on attempt {attempt + 1}. The site took too long to respond.")
+        except httpx.HTTPStatusError as exc:
+            last_error = exc
+            logger.error(f"Apify HTTP error on attempt {attempt + 1}: {exc}")
+        except httpx.RequestError as exc:
+            last_error = exc
+            logger.error(f"Network error on attempt {attempt + 1}: {exc}")
         except Exception as exc:
+            last_error = exc
             logger.error(f"Unexpected error on attempt {attempt + 1}: {exc}")
 
         if attempt < retries - 1:
             logger.info("Retrying in 3 seconds...")
             time.sleep(3)
 
-    logger.error("All scraper retries failed for this URL.")
+    logger.error(f"All scraper retries failed for this URL. Last error: {last_error}")
     return None, None

@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
@@ -17,6 +17,7 @@ from app.scraper import get_price_and_name
 logger = logging.getLogger(__name__)
 APP_TIMEZONE = ZoneInfo(os.getenv("APP_TIMEZONE", "Asia/Kolkata"))
 SCHEDULER_JOB_ID = "price-alert-db-poll"
+DEFAULT_DAILY_CHECK_TIME = os.getenv("DEFAULT_DAILY_CHECK_TIME", "08:00")
 
 
 def utc_now() -> datetime:
@@ -31,35 +32,97 @@ def stored_utc_to_local(value: datetime) -> datetime:
     return value.replace(tzinfo=timezone.utc).astimezone(APP_TIMEZONE)
 
 
-def should_check_alert(alert: Alert, now_utc: datetime, now_local: datetime) -> bool:
-    if alert.schedule_mode == "custom_times":
+def parse_hhmm(value: str) -> time:
+    hour, minute = value.split(":", 1)
+    return time(hour=int(hour), minute=int(minute))
+
+
+def local_to_utc_naive(value: datetime) -> datetime:
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def next_daily_check(now_local: datetime | None = None) -> datetime:
+    now_local = now_local or local_now()
+    daily_time = parse_hhmm(DEFAULT_DAILY_CHECK_TIME)
+    next_local = now_local.replace(
+        hour=daily_time.hour,
+        minute=daily_time.minute,
+        second=0,
+        microsecond=0,
+    )
+    if next_local <= now_local:
+        next_local += timedelta(days=1)
+    return local_to_utc_naive(next_local)
+
+
+def parse_custom_times(raw_value: str | None) -> list[time]:
+    try:
+        values = json.loads(raw_value or "[]")
+    except json.JSONDecodeError:
+        return []
+
+    parsed_times = []
+    for value in values:
         try:
-            custom_times = json.loads(alert.custom_times or "[]")
-        except json.JSONDecodeError:
-            logger.warning(f"Alert ID {alert.id} has invalid custom time data.")
-            return False
+            parsed_times.append(parse_hhmm(value))
+        except (AttributeError, TypeError, ValueError):
+            continue
 
-        current_time = now_local.strftime("%H:%M")
-        if current_time not in custom_times:
-            return False
+    return sorted(parsed_times)
 
-        if not alert.last_checked_at:
-            return True
 
-        last_checked_slot = stored_utc_to_local(alert.last_checked_at).strftime("%Y-%m-%d %H:%M")
-        current_slot = now_local.strftime("%Y-%m-%d %H:%M")
-        return last_checked_slot != current_slot
+def next_custom_time_check(alert: Alert, now_local: datetime | None = None) -> datetime:
+    now_local = now_local or local_now()
+    custom_times = parse_custom_times(alert.custom_times)
+    if not custom_times:
+        logger.warning(f"Alert ID {alert.id} has no valid custom times; using daily default.")
+        return next_daily_check(now_local)
 
-    if not alert.last_checked_at:
-        return True
+    for custom_time in custom_times:
+        candidate = now_local.replace(
+            hour=custom_time.hour,
+            minute=custom_time.minute,
+            second=0,
+            microsecond=0,
+        )
+        if candidate > now_local:
+            return local_to_utc_naive(candidate)
 
-    time_since_check = now_utc - alert.last_checked_at
-    return time_since_check >= timedelta(minutes=alert.interval_minutes)
+    first_time = custom_times[0]
+    next_day = now_local + timedelta(days=1)
+    return local_to_utc_naive(
+        next_day.replace(
+            hour=first_time.hour,
+            minute=first_time.minute,
+            second=0,
+            microsecond=0,
+        )
+    )
+
+
+def calculate_next_check_at(alert: Alert, now_utc: datetime | None = None) -> datetime:
+    now_utc = now_utc or utc_now()
+    now_local = now_utc.replace(tzinfo=timezone.utc).astimezone(APP_TIMEZONE)
+    daily_next = next_daily_check(now_local)
+
+    if alert.schedule_mode == "period":
+        interval_minutes = max(alert.interval_minutes or 1440, 1)
+        return min(now_utc + timedelta(minutes=interval_minutes), daily_next)
+
+    if alert.schedule_mode == "custom_times":
+        return min(next_custom_time_check(alert, now_local), daily_next)
+
+    return daily_next
+
+
+def should_check_alert(alert: Alert, now_utc: datetime) -> bool:
+    return alert.next_check_at is None or alert.next_check_at <= now_utc
 
 
 async def apply_alert_result(alert: Alert, current_price: float, product_name: str | None):
     alert.current_price = current_price
     alert.last_checked_at = utc_now()
+    alert.next_check_at = calculate_next_check_at(alert, alert.last_checked_at)
 
     if product_name:
         alert.product_name = product_name
@@ -73,6 +136,7 @@ async def apply_alert_result(alert: Alert, current_price: float, product_name: s
             url=alert.product_url,
         )
         alert.notified = True
+        logger.info(f"Notification sent for Alert ID {alert.id}. Next check at {alert.next_check_at}.")
         # logger.info(f"Notification flow completed for Alert ID {alert.id}; alert remains scheduled.")
     else:
         logger.info(f"Alert ID {alert.id} checked: Rs. {current_price} is above target Rs. {alert.target_price}.")
@@ -83,30 +147,36 @@ async def check_database_alerts():
     db: Session = SessionLocal()
 
     try:
-        alerts = db.query(Alert).all()
-        # logger.info(f"Scheduler loaded {len(alerts)} alert(s) from DB.")
         now_utc = utc_now()
-        now_local = local_now()
+        due_alerts = (
+            db.query(Alert)
+            .filter((Alert.next_check_at == None) | (Alert.next_check_at <= now_utc))
+            .all()
+        )
+        logger.info(f"Scheduler loaded {len(due_alerts)} due alert(s) from DB.")
 
-        for alert in alerts:
-            if not should_check_alert(alert, now_utc, now_local):
+        for alert in due_alerts:
+            if not should_check_alert(alert, now_utc):
                 continue
 
-            # logger.info(
-            #     f"Schedule reached for Alert ID {alert.id} "
-            #     f"(mode={alert.schedule_mode}, interval={alert.interval_minutes}, custom_times={alert.custom_times})."
-            # )
+            logger.info(
+                f"Executing price check for Alert ID {alert.id}; "
+                f"mode={alert.schedule_mode}, next_check_at={alert.next_check_at}."
+            )
             current_price, product_name = await asyncio.to_thread(
                 get_price_and_name,
                 alert.product_url,
             )
 
             if current_price is None:
+                alert.next_check_at = calculate_next_check_at(alert, now_utc)
+                db.commit()
+                logger.warning(f"Alert ID {alert.id} price check failed; rescheduled for {alert.next_check_at}.")
                 continue
 
             await apply_alert_result(alert, current_price, product_name)
             db.commit()
-            logger.info(f"Alert ID {alert.id} saved; next eligibility will be calculated from last_checked_at.")
+            logger.info(f"Alert ID {alert.id} saved and rescheduled for {alert.next_check_at}.")
 
     except Exception as exc:
         logger.error(f"Error in scheduler check logic: {exc}")

@@ -47,6 +47,7 @@ class AlertResponse(BaseModel):
     notified: bool
     created_at: datetime
     last_checked_at: Optional[datetime]
+    next_check_at: Optional[datetime]
 
     @field_validator("custom_times", mode="before")
     @classmethod

@@ -13,6 +13,7 @@ interface ApiAlert {
   notified: boolean;
   created_at: string;
   last_checked_at?: string | null;
+  next_check_at?: string | null;
 }
 
 const isNgrok = (import.meta.env.VITE_API_URL || '').includes('ngrok');
@@ -34,6 +35,7 @@ const mapAlert = (alert: ApiAlert): Alert => ({
   notified: alert.notified,
   createdAt: alert.created_at,
   lastCheckedAt: alert.last_checked_at,
+  nextCheckAt: alert.next_check_at,
 });
 
 export const fetchAlerts = async (): Promise<Alert[]> => {

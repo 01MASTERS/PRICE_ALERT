@@ -12,6 +12,7 @@ export interface Alert {
   notified: boolean;
   createdAt: string;
   lastCheckedAt?: string | null;
+  nextCheckAt?: string | null;
 }
 
 export interface CreateAlertReq {
