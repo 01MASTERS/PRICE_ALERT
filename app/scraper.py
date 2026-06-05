@@ -123,8 +123,9 @@ def _normalize_items(data: Any) -> list[dict]:
     return []
 
 
-def _fetch_apify_record(product_url: str) -> Optional[dict]:
-    if not APIFY_TOKEN:
+def _fetch_apify_record(product_url: str, apify_token: Optional[str] = None) -> Optional[dict]:
+    token = apify_token or APIFY_TOKEN
+    if not token:
         raise RuntimeError("APIFY_TOKEN is not set")
 
     actor_id = APIFY_ACTOR.replace("/", "~")
@@ -137,7 +138,7 @@ def _fetch_apify_record(product_url: str) -> Optional[dict]:
         "pincode": APIFY_PINCODE,
     }
 
-    params = {"token": APIFY_TOKEN}
+    params = {"token": token}
 
     with httpx.Client(timeout=APIFY_TIMEOUT) as client:
         resp = client.post(url, params=params, json=run_input)
@@ -152,9 +153,13 @@ def _fetch_apify_record(product_url: str) -> Optional[dict]:
     return first if isinstance(first, dict) else None
 
 
-def extract_direct_price(page: Any, product_url: str) -> Tuple[Optional[float], Optional[str]]:
+def extract_direct_price(
+    page: Any,
+    product_url: str,
+    apify_token: Optional[str] = None,
+) -> Tuple[Optional[float], Optional[str]]:
     logger.info("Trying Apify product price extraction.")
-    record = _fetch_apify_record(product_url)
+    record = _fetch_apify_record(product_url, apify_token=apify_token)
     if not record:
         logger.warning("Apify returned no product data.")
         return None, None
@@ -169,13 +174,17 @@ def extract_direct_price(page: Any, product_url: str) -> Tuple[Optional[float], 
     return current_price, product_name
 
 
-def get_price_and_name(product_url: str, retries: int = 3) -> Tuple[Optional[float], Optional[str]]:
+def get_price_and_name(
+    product_url: str,
+    retries: int = 3,
+    apify_token: Optional[str] = None,
+) -> Tuple[Optional[float], Optional[str]]:
     last_error = None
 
     for attempt in range(retries):
         try:
             logger.info(f"Attempt {attempt + 1}: checking product price.")
-            current_price, product_name = extract_direct_price(None, product_url)
+            current_price, product_name = extract_direct_price(None, product_url, apify_token=apify_token)
             if current_price is not None:
                 return current_price, product_name
 

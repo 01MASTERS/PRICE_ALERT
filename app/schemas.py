@@ -45,6 +45,7 @@ class AlertResponse(BaseModel):
     schedule_mode: str
     custom_times: Optional[list[str]]
     notified: bool
+    active: bool
     created_at: datetime
     last_checked_at: Optional[datetime]
     next_check_at: Optional[datetime]
@@ -62,3 +63,45 @@ class AlertResponse(BaseModel):
             return None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserCreate(BaseModel):
+    username: str = Field(min_length=2, max_length=80)
+    password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("username")
+    @classmethod
+    def normalize_username(cls, value: str):
+        return value.strip()
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+    @field_validator("username")
+    @classmethod
+    def normalize_login_username(cls, value: str):
+        return value.strip()
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    telegram_chat_id: Optional[str]
+    telegram_connected_at: Optional[datetime]
+    apify_token: Optional[str]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
+class UserSettingsUpdate(BaseModel):
+    telegram_chat_id: Optional[str] = None
+    apify_token: Optional[str] = None

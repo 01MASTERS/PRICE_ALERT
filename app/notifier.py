@@ -9,12 +9,20 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 
-async def send_telegram_alert(product_name: str, current_price: float, target_price: float, url: str):
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        logger.error("Telegram credentials missing in .env file.")
+async def send_telegram_alert(
+    chat_id: str,
+    product_name: str,
+    current_price: float,
+    target_price: float,
+    url: str,
+):
+    if not TELEGRAM_BOT_TOKEN:
+        logger.error("Telegram bot token missing in .env file.")
+        return
+    if not chat_id:
+        logger.error("Telegram chat ID missing for alert owner.")
         return
 
     message = (
@@ -27,7 +35,7 @@ async def send_telegram_alert(product_name: str, current_price: float, target_pr
 
     api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
+        "chat_id": chat_id,
         "text": message,
         "parse_mode": "HTML",
     }

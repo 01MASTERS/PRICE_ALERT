@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import SessionLocal
 from app.models import Alert
@@ -130,13 +130,14 @@ async def apply_alert_result(alert: Alert, current_price: float, product_name: s
     if current_price <= alert.target_price:
         logger.info(f"TARGET HIT for Alert ID {alert.id}: Rs. {current_price} <= Rs. {alert.target_price}.")
         await send_telegram_alert(
+            chat_id=alert.user.telegram_chat_id if alert.user else None,
             product_name=alert.product_name or "Unknown Product",
             current_price=current_price,
             target_price=alert.target_price,
             url=alert.product_url,
         )
         alert.notified = True
-        logger.info(f"Notification sent for Alert ID {alert.id}. Next check at {alert.next_check_at}.")
+        logger.info(f"Notification attempted for Alert ID {alert.id}. Next check at {alert.next_check_at}.")
         # logger.info(f"Notification flow completed for Alert ID {alert.id}; alert remains scheduled.")
     else:
         logger.info(f"Alert ID {alert.id} checked: Rs. {current_price} is above target Rs. {alert.target_price}.")
@@ -150,6 +151,8 @@ async def check_database_alerts():
         now_utc = utc_now()
         due_alerts = (
             db.query(Alert)
+            .options(joinedload(Alert.user))
+            .filter(Alert.active == True)
             .filter((Alert.next_check_at == None) | (Alert.next_check_at <= now_utc))
             .all()
         )
@@ -166,6 +169,8 @@ async def check_database_alerts():
             current_price, product_name = await asyncio.to_thread(
                 get_price_and_name,
                 alert.product_url,
+                3,
+                alert.user.apify_token if alert.user else None,
             )
 
             if current_price is None:
