@@ -10,6 +10,7 @@ export interface Alert {
   scheduleMode: ScheduleMode;
   customTimes?: string[] | null;
   notified: boolean;
+  active: boolean;
   createdAt: string;
   lastCheckedAt?: string | null;
   nextCheckAt?: string | null;

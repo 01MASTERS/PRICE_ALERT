@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import type { Alert, CreateAlertReq, UpdateAlertReq } from '../types/alert';
-import { fetchAlerts, createAlert, updateAlert, deleteAlert } from '../services/api';
+import { fetchAlerts, createAlert, updateAlert, deleteAlert, toggleAlert } from '../services/api';
 import { Navbar } from '../components/Navbar';
 import { DashboardCards } from '../components/DashboardCards';
 import { AlertForm } from '../components/AlertForm';
@@ -10,14 +11,23 @@ import { AlertsList } from '../components/AlertsList';
 import { EmptyState } from '../components/EmptyState';
 import { Loader } from '../components/loader';
 import { DeleteModal } from '../components/DeleteModal';
+import type { User } from '../types/user';
 
-export const Home = () => {
+interface Props {
+  user: User;
+  onLogout: () => void;
+}
+
+export const Home = ({ user, onLogout }: Props) => {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
   const [formLoading, setFormLoading] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [deleteModalId, setDeleteModalId] = useState<string | null>(null);
   const [editingAlert, setEditingAlert] = useState<Alert | null>(null);
+  const navigate = useNavigate();
+
+  const isConfigured = !!(user.apify_token && user.telegram_chat_id);
 
   const getErrorMessage = useCallback((fallback: string, error: unknown) => {
     if (!axios.isAxiosError(error)) return fallback;
@@ -49,7 +59,12 @@ export const Home = () => {
     try {
       const newAlert = await createAlert(payload);
       setAlerts((prev) => [newAlert, ...prev]);
-      if (newAlert.currentPrice == null) {
+      if (!newAlert.active) {
+        toast('Alert created but paused — configure Apify token & Telegram in Settings to activate.', {
+          icon: '⚠️',
+          duration: 5000,
+        });
+      } else if (newAlert.currentPrice == null) {
         toast.success('Alert created. First price check will retry in the background.');
       } else {
         toast.success('Alert created and price fetched.');
@@ -92,12 +107,56 @@ export const Home = () => {
     }
   };
 
-  const activeCount = alerts.filter((alert) => !alert.notified).length;
+  const handleToggle = async (id: string) => {
+    // Check if trying to enable but settings not configured
+    const targetAlert = alerts.find((a) => a.id === id);
+    if (targetAlert && !targetAlert.active && !isConfigured) {
+      toast(
+        (t) => (
+          <span className="flex items-center gap-2 text-sm">
+            <span>Configure Apify token & Telegram first.</span>
+            <button
+              onClick={() => { toast.dismiss(t.id); navigate('/settings'); }}
+              className="font-bold text-indigo-600 hover:text-indigo-800 underline whitespace-nowrap"
+            >
+              Go to Settings
+            </button>
+          </span>
+        ),
+        { icon: '⚙️', duration: 5000 }
+      );
+      return;
+    }
+
+    // Optimistic update
+    setAlerts((prev) => prev.map((alert) => (
+      alert.id === id ? { ...alert, active: !alert.active } : alert
+    )));
+    try {
+      const updatedAlert = await toggleAlert(id);
+      setAlerts((prev) => prev.map((alert) => (
+        alert.id === id ? updatedAlert : alert
+      )));
+      if (updatedAlert.active) {
+        toast.success('Alert resumed.');
+      } else {
+        toast.success('Alert paused.');
+      }
+    } catch (error) {
+      // Revert on error
+      toast.error(getErrorMessage('Failed to toggle alert', error));
+      setAlerts((prev) => prev.map((alert) => (
+        alert.id === id ? { ...alert, active: !alert.active } : alert
+      )));
+    }
+  };
+
+  const activeCount = alerts.filter((alert) => alert.active && !alert.notified).length;
   const triggeredCount = alerts.filter((alert) => alert.notified).length;
 
   return (
     <div className="min-h-screen bg-gray-50/50 pb-20 font-sans selection:bg-indigo-100 selection:text-indigo-900">
-      <Navbar />
+      <Navbar user={user} onLogout={onLogout} />
       
       {/* Hero / Header Section */}
       <div className="bg-white border-b border-gray-200">
@@ -134,7 +193,7 @@ export const Home = () => {
             ) : alerts.length === 0 ? (
               <EmptyState />
             ) : (
-              <AlertsList alerts={alerts} onDeleteClick={setDeleteModalId} onEditClick={setEditingAlert} />
+              <AlertsList alerts={alerts} onDeleteClick={setDeleteModalId} onEditClick={setEditingAlert} onToggle={handleToggle} />
             )}
           </div>
         </div>
