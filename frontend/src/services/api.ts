@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { Alert, CreateAlertReq, UpdateAlertReq } from '../types/alert';
-import type { AuthResponse, LoginReq, RegisterReq, User } from '../types/user';
+import type { AuthResponse, LoginReq, RegisterReq, SettingsReq, User } from '../types/user';
 
 interface ApiAlert {
   id: number;
