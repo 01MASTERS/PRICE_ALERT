@@ -1,4 +1,4 @@
-import { BellRing, BarChart3 } from 'lucide-react';
+import { BellRing, BarChart3, Settings, LogOut } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { User } from '../types/user';
 
@@ -19,8 +19,8 @@ export const Navbar = ({ user, onLogout }: Props) => (
             Price Sentinel
           </span>
         </div>
-        <div className="hidden sm:flex items-center gap-4">
-           <div className="flex items-center gap-2 text-sm font-medium text-gray-500 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
+        <div className="flex items-center gap-3 sm:gap-4">
+           <div className="hidden md:flex items-center gap-2 text-sm font-medium text-gray-500 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
              <BarChart3 className="w-4 h-4" />
              <span>Active Monitoring</span>
            </div>
@@ -30,13 +30,15 @@ export const Navbar = ({ user, onLogout }: Props) => (
                 <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold uppercase">
                   {user.username.charAt(0)}
                 </div>
-                <span className="hidden md:inline">{user.username}</span>
+                <span className="hidden sm:inline">{user.username}</span>
               </div>
-              <Link to="/settings" className="text-sm font-semibold text-gray-600 hover:text-indigo-600">
-                Settings
+              <Link to="/settings" className="flex items-center text-sm font-semibold text-gray-600 hover:text-indigo-600 p-1" title="Settings">
+                <span className="hidden sm:inline">Settings</span>
+                <Settings className="w-5 h-5 sm:hidden" />
               </Link>
-              <button onClick={onLogout} className="text-sm font-semibold text-gray-600 hover:text-red-600">
-                Logout
+              <button onClick={onLogout} className="flex items-center text-sm font-semibold text-gray-600 hover:text-red-600 p-1" title="Logout">
+                <span className="hidden sm:inline">Logout</span>
+                <LogOut className="w-5 h-5 sm:hidden" />
               </button>
             </>
            ) : null}
